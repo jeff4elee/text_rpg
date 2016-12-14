@@ -1,27 +1,38 @@
 import sqlite3
 import simplejson as json
 
-#stores connection to database
-con = sqlite3.connect('data.db')
-
-#cursor traverses the records of the table
-cur = con.cursor()
 playerId = None
 
-#cur.execute('''DROP TABLE Users''')
+def retrieve_con():
+    return sqlite3.connect('data.db')
 
-#cur.execute('''CREATE TABLE Users(User_Id INTEGER PRIMARY KEY,''' 
-#            '''Username TEXT, Password TEXT)''')
+def reset_tables():
 
-#cur.execute('''DROP TABLE UserData''')
+    con = retrieve_con()
+    cur = con.cursor()
+    
+    cur.execute('''DROP TABLE Users''')
 
-#cur.execute('''CREATE TABLE UserData(UserData_Id INTEGER PRIMARY KEY,''' 
-#            '''json_value TEXT, User_Id INTEGER,'''
-#            '''FOREIGN KEY(User_Id) REFERENCES Users(User_Id))''')
+    cur.execute('''CREATE TABLE Users(User_Id INTEGER PRIMARY KEY,''' 
+               '''Username TEXT, Password TEXT)''')
+
+    cur.execute('''DROP TABLE UserData''')
+
+    cur.execute('''CREATE TABLE UserData(UserData_Id INTEGER PRIMARY KEY,''' 
+                '''json_value TEXT, User_Id INTEGER,'''
+                '''FOREIGN KEY(User_Id) REFERENCES Users(User_Id))''')
+
+    cur.execute('''DROP TABLE Items''')
+
+    cur.execute('''CREATE TABLE Items(Item_Id INTEGER PRIMARY KEY, '''
+                '''Item_Name TEXT UNIQUE, Rarity INTEGER, json_value TEXT)''')
                 
 def prompt_registration():
     """ Prompts the user to register a username/password for
         future plays """
+    
+    con = retrieve_con()
+    cur = con.cursor()
     
     user = raw_input("Enter a username\n").lower()
 
@@ -46,12 +57,17 @@ def prompt_registration():
         
     #inserts the unique record into the database
     cur.execute('''INSERT INTO Users(Username, Password) VALUES(?, ?)''', (user, password,))
+    con.commit()
+    con.close()
     print "Registered successfully"
 
 def prompt_login():
     """ Prompts the user for login info and
         loads their associated save file """
-    
+
+    con = retrieve_con()
+    cur = con.cursor()
+
     user = raw_input("Enter your username\n").lower()
     
     #queries the username and determines if it exists
@@ -80,33 +96,49 @@ def prompt_login():
 
     #assigns the playerId as the User_Id int
     playerId = query.fetchone()[0]
-    print "Login successful" 
+    print "Login successful"
 
     try:
         #retrieves the jsonfile from the UserData table 
         query = cur.execute('''SELECT json_value FROM UserData WHERE User_Id = ?''', (playerId,))    
         json_file = query.fetchone()[0]
+        con.commit()
+        con.close()
         print "Save file loaded"
-        return json_file
+        return {'name': user, 'json_file': json_file}
     except:
         #creates a new row in the Userdata table for the new player
         print "No previous save file\n"
         cur.execute('''INSERT INTO UserData(User_Id) VALUES(?)''', (playerId,))
-        print "A new file has been created"        
-        return None
+        con.commit()
+        print "A new file has been created"
+        return {'name': user}
 
 def save(json_file, data):
     """ Saves the current game by updating the user's table row
         with the new data """
+
+    global playerId
+    con = retrieve_con()
+    cur = con.cursor()
     
     with open(json_file, 'w') as fp:
         saved_file = json.dumps(data, fp)
         print saved_file
-        cur.execute('''UPDATE UserData SET json_value=? WHERE User_Id = ?''', (saved_file, playerId,))
+        cur.execute('''UPDATE UserData SET json_value=? WHERE User_Id = ?''',
+                    (saved_file, playerId,))
         fp.close()
+
+    con.commit()
+    con.close()
+    
 
 def displayUserInfo():
     """ Displays the user's play data """
+    global playerId
+
+    con = retrieve_con()
+    cur = con.cursor()
     
     cur.execute('''SELECT * FROM UserData WHERE User_Id = ?''', (playerId,))
 
@@ -118,6 +150,9 @@ def displayUserInfo():
 def displayUserTable():
     """ Displays all the users/passwords """
 
+    con = retrieve_con()
+    cur = con.cursor()
+    
     cur.execute('''SELECT * FROM Users''')
 
     data = cur.fetchall()
