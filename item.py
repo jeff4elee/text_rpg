@@ -2,12 +2,14 @@ from enum import Enum
 import conf
 
 class Slot(Enum):
-    Primary = 0x00800
-    Secondary = 0x04000
+    Primary = 0x0001
+    Secondary = 0x0002
+    Two_Hand = 0x0003
     
 class Item(object):
 
     def __init__(self, item_name, rarity, description, consumable=None):
+        """ Barebones parent class that provides item descriptions """
         self._name = item_name
         self._rarity = rarity
         self._description = description
@@ -34,19 +36,21 @@ class Item(object):
     def get_dict(self):
         data_dict = dict()
         data_dict[conf.ITEM_NAME] = self._name
+        data_dict[conf.ITEM_RARITY] = self._rarity
         data_dict[conf.ITEM_DSCRPT] = self._description
         return data_dict
     
     @staticmethod
     def from_dict(dct):
         name = dct[conf.ITEM_NAME]
-        descript = dct[conf.ITEM_DSCRPT]
         rarity = dct[conf.ITEM_RARITY]
+        descript = dct[conf.ITEM_DSCRPT]
         return Item(name, rarity, descript)
     
 class Potion(Item):
 
     def __init__(self, item_name, rarity, description, restore_value):
+        """ Consumable item that provides some form of restore value """
         super(Potion, self).__init__(item_name, rarity, description, True)
         self._restore_value = restore_value
 
@@ -65,11 +69,13 @@ class Potion(Item):
         rarity = dct[conf.ITEM_RARITY]
         descript = dct[conf.ITEM_DSCRPT]
         restore = dct[conf.POTION_HEAL_DATA]
-        return Potion(name, descript, restore)
+        return Potion(name, rarity, descript, restore)
 
 class Equippable(Item):
     
     def __init__(self, item_name, rarity, description, slot_value, bonus):
+        """ Abstract item class that includes abstract equip slot usage
+            and stat bonuses """
         super(Equippable, self).__init__(item_name, rarity, description, False)
         self._slot_value = slot_value
         self._bonus = bonus
@@ -83,7 +89,9 @@ class Equippable(Item):
 class PrimaryWeapon(Equippable):
     
     def __init__(self, item_name, rarity, description, power):
-        super(PrimaryWeapon, self).__init__(item_name, rarity, description, 0x02000, power)
+        " Primary Weapon that with slot 0x0200 and a power bonus """
+        super(PrimaryWeapon, self).__init__(item_name, rarity, description,
+                                            Slot.Primary.value, power)
 
     def get_dict(self):
         data_dict = super(PrimaryWeapon, self).get_dict()
@@ -101,4 +109,29 @@ class PrimaryWeapon(Equippable):
         rarity = dct[conf.ITEM_RARITY]
         descript = dct[conf.ITEM_DSCRPT]
         atk = dct[conf.POWER_DATA]
-        return PrimaryWeapon(name, descript, atk)
+        return PrimaryWeapon(name, rarity, descript, atk)
+
+class SecondaryWeapon(Equippable):
+    
+    def __init__(self, item_name, rarity, description, power):
+        " Primary Weapon that with slot 0x0200 and a power bonus """
+        super(PrimaryWeapon, self).__init__(item_name, rarity, description,
+                                            Slot.Secondary.value, power)
+
+    def get_dict(self):
+        data_dict = super(PrimaryWeapon, self).get_dict()
+        data_dict[conf.POWER_DATA] = self.get_bonus()
+        return data_dict
+        
+    def encode(self):
+        """ Returns a dictionary filled with the weapon data """
+        data_dict = self.get_dict()
+        return {self.__class__.__name__: data_dict}
+
+    @staticmethod
+    def from_dict(dct):
+        name = dct[conf.ITEM_NAME]
+        rarity = dct[conf.ITEM_RARITY]
+        descript = dct[conf.ITEM_DSCRPT]
+        atk = dct[conf.POWER_DATA]
+        return PrimaryWeapon(name, rarity, descript, atk)

@@ -22,11 +22,9 @@ def reset_tables():
                 '''json_value TEXT, User_Id INTEGER,'''
                 '''FOREIGN KEY(User_Id) REFERENCES Users(User_Id))''')
 
-    cur.execute('''DROP TABLE Items''')
-
-    cur.execute('''CREATE TABLE Items(Item_Id INTEGER PRIMARY KEY, '''
-                '''Item_Name TEXT UNIQUE, Rarity INTEGER, json_value TEXT)''')
-                
+    con.commit()
+    con.close()
+    
 def prompt_registration():
     """ Prompts the user to register a username/password for
         future plays """
@@ -45,14 +43,14 @@ def prompt_registration():
         user = raw_input("Username taken. Enter another\n").lower()
         cur.execute('''SELECT Username FROM Users WHERE Username = ?''', (user,))
 
-    if(user == 'quit()'):
+    if(user == 'quit'):
         return
     
     #if record does not exist, proceed to prompt for a password
     password = raw_input("Enter a password\n")
 
 
-    if(password == 'quit()'):
+    if(password == 'quit'):
         return
         
     #inserts the unique record into the database
@@ -75,7 +73,7 @@ def prompt_login():
 
     #if record does not exist, repeat the prompt until a valid username is provided    
     while(cur.fetchone() is None):
-        if(user == 'quit()'):
+        if(user == 'quit'):
             return
         user = raw_input("Invalid Username. Enter a valid one\n",).lower()
         cur.execute('''SELECT Username FROM Users WHERE Username = ?''', (user,))
@@ -85,7 +83,7 @@ def prompt_login():
 
     cur.execute('''SELECT * FROM Users WHERE Username = ? AND Password = ?''', (user, password,))    
     while(cur.fetchone() is None):
-        if(password == 'quit()'):
+        if(password == 'quit'):
             return
         password = raw_input("Invalid password. Try again\n")
         cur.execute('''SELECT * FROM Users WHERE Username = ? AND Password = ?''', (user, password,))    
@@ -111,6 +109,7 @@ def prompt_login():
         print "No previous save file\n"
         cur.execute('''INSERT INTO UserData(User_Id) VALUES(?)''', (playerId,))
         con.commit()
+        con.close()
         print "A new file has been created"
         return {'name': user}
 
@@ -124,14 +123,15 @@ def save(json_file, data):
     
     with open(json_file, 'w') as fp:
         saved_file = json.dumps(data, fp)
-        print saved_file
+
         cur.execute('''UPDATE UserData SET json_value=? WHERE User_Id = ?''',
                     (saved_file, playerId,))
         fp.close()
 
     con.commit()
     con.close()
-    
+
+    print "File successfully saved!"
 
 def displayUserInfo():
     """ Displays the user's play data """

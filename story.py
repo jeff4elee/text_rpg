@@ -14,19 +14,34 @@ def init_json_to_game(player, data_dict):
 
         player_file = json.loads(data_dict['json_file'])
         player_data = player_file['Player']
-        
+
+        #opens up a connection to the database where the item table lies
         con = game.retrieve_con()
         cur = con.cursor()
-       
+
+        #decodes each item in the inventory and equipped lists
         for index, item in enumerate(player_data[conf.INVENTORY_DATA]):
+
+            #queries the json_value of the item by its name
+            cur.execute("""SELECT json_value FROM Items """ \
+                        """WHERE Item_Name = ?""", (item,))
+
+            #loads the item dictionary from the json string
+            item_data = json.loads(cur.fetchone()[0])
+            
+            player_data[conf.INVENTORY_DATA][index] = decode(item_data)
+
+        for index, item in enumerate(player_data[conf.EQUIP_DATA]):
             
             cur.execute("""SELECT json_value FROM Items """ \
                         """WHERE Item_Name = ?""", (item,))
 
             item_data = json.loads(cur.fetchone()[0])
-            player_data[conf.INVENTORY_DATA][index] = decode(item_data)
+            player_data[conf.EQUIP_DATA][index] = decode(item_data)
 
+        #closes connection as the database is not needed anymore    
         con.close()
+        
         player = decode(player_file)
     else:    
         player = Player(data_dict['name'])
@@ -40,6 +55,8 @@ def enter_story():
     json_data = game.prompt_login()
     player = init_json_to_game(player, json_data)
     init_world(player)
+
+    print ""
     story(player)
 
 def story(player):
@@ -48,11 +65,17 @@ def story(player):
 
         player.attack(monster)
 
-        time.sleep(conf.DEFAULT_PAUSE)
+        print player.get_name() + " attacks " + str(monster.get_name()) + \
+              " for " + str(player.get_power()) + " damage\n"
+        
+        time.sleep(2*conf.DEFAULT_PAUSE)
 
         monster.attack(player)
 
-        time.sleep(conf.DEFAULT_PAUSE)
+        print monster.get_name() + " attacks " + str(player.get_name()) + \
+              " for " + str(monster.get_power()) + " damage\n"
+        
+        time.sleep(2*conf.DEFAULT_PAUSE)
        
     def item_menu_sequence(player):
 
@@ -104,17 +127,15 @@ def story(player):
             elif(entered_option == str(ItemOptions.Description.value)):
                 print utilized_item.get_description()
     
-                return
-
             elif(entered_option == str(ItemOptions.Cancel.value)):
                 return
 
     def display_unit_stats(units):
         for unit in units:
-            print str(unit)
+            print str(unit) + "\n"
         
     def fight_sequence(player, monster):
-        """ Initiates a fight with a monster """
+        """ Initiates a fight with a monster fight_sequence(player, monster)"""
 
         display_unit_stats([player, monster])
         
@@ -136,27 +157,29 @@ def story(player):
             elif(entered_option == str(FightOptions.Use_Item.value)):
 
                 item_menu_sequence(player)
+                display_unit_stats([monster])
                 
-
-        time.sleep(2*conf.DEFAULT_PAUSE)
+        time.sleep(conf.DEFAULT_PAUSE)
         
         if(player.get_health() <= 0):
             print "Game Over. You have died."
             exit(0)
 
         else:
+            
             print "You have slain the monster\n"
             time.sleep(2*conf.DEFAULT_PAUSE)
 
-            item = decode(json.loads(cur.fetchone()[0]))
+            item = monster.get_loot()
 
-            print str(item) + " has dropped"
+            if item:
+                print str(item) + " has dropped"
 
-            pick_up_prompt = str(raw_input("Do you wish to pick it up? (Y/N)"))
+                pick_up_prompt = str(raw_input("Do you wish to pick it up? (Y/N)"))
 
-            if(pick_up_prompt.lower() == 'y'):
-                player.add_to_inventory(item)
-                print "\nYou have picked up " + str(item) + "\n"
+                if(pick_up_prompt.lower() == 'y'):
+                    player.add_to_inventory(item)
+                    print "\nYou have picked up " + str(item) + "\n"
 
     def prompt_move(player):
         
@@ -173,7 +196,8 @@ def story(player):
 
                 #Infinite loop of options broken by exit choice
                 while(True):
-                    
+
+                    print
                     TownOptions.display()
                     
                     entered_option = str(raw_input())
@@ -183,9 +207,11 @@ def story(player):
                         save(player)
 
                     elif(entered_option == str(TownOptions.Display_Stats.value)):
-                        for key, value in player.get_dict().iteritems():
-                            print key, ": ", str(value)
-                            
+                        player.display_stats()
+                        
+                    elif(entered_option == str(TownOptions.Display_Equipment.value)):
+                        player.display_equipped()
+                        
                     elif(entered_option == str(TownOptions.Exit_Town.value)):
                         break
 
@@ -206,11 +232,13 @@ def story(player):
         elif(isinstance(player.get_position(), Room)):
             
             while(player.get_position().has_monsters()):
+                
                 monster = player.get_position().next_monster()
+                
                 if monster.get_name():
-                    print str(monster)
+                    print "You have encountered a", monster.get_name()
                 else:
-                    print "You have encountered a Goblin"
+                    print "You have encountered a STUB"
 
                 print ""                    
                 fight_sequence(player, monster)

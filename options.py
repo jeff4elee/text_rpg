@@ -21,7 +21,8 @@ class TownOptions(Enum):
 
     Save = 1
     Display_Stats = 2
-    Exit_Town = 3
+    Display_Equipment = 3
+    Exit_Town = 4
 
     @classmethod
     def display(self):

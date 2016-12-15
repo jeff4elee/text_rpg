@@ -2,17 +2,18 @@ import random
 import time
 import sqlite3
 import simplejson as json
+import conf
+from player import Unit, Monster
 from decoder import decode
 from graph import Graph
-from conf import DEFAULT_HEALTH, DEFAULT_MANA, DEFAULT_POWER
-import conf
 
 class Room(object):
     
-    def __init__(self, room_id, monsters=None, exitable=None):
-        ''' Sets the room to a unique id, with optional monsters '''
-        ''' and exit route '''
-        self._room_id = room_id 
+    def __init__(self, room_id, monster_type, monsters=None, exitable=None):
+        ''' Sets the room to a unique id, with a monster_type,
+            optional monster list and a boolean exit route '''
+        self._room_id = room_id
+        self._monster_type = monster_type
         self._monsters = monsters if monsters else []
         self._exitable = exitable if exitable else False
 
@@ -39,32 +40,43 @@ class Room(object):
     def generate_monsters(self, num_to_generate, difficulty, drop_rate):
         """ Generates monsters of varying degrees of difficulty
             and adds them to the list of monsters """
+
+        monster_names = conf.MONSTER_TYPES[self._monster_type]
+
         for i in range(num_to_generate):
 
             item_drop = None
 
+            #connection needed to access item table
             con = sqlite3.connect(conf.DATA_BASE)
             cur = con.cursor()
-            
+
+            #decodes a random item in the item table as a loot drop
+            #at a rate proportionate to drop_rate / 1
             if random.random() < drop_rate:
 
                 cur.execute("""SELECT json_value FROM Items WHERE Rarity=?""" \
                             """ORDER BY RANDOM() LIMIT 1""",
-                            (random.randrange(1, difficulty)))
+                            (random.randint(1, difficulty),))
                             
                 item_drop = decode(json.loads(cur.fetchone()[0]))
                             
             #generates monsters with various stats
             #health is 4 - 5 times the difficulty
-            #power is 1 - 2 times the difficulty
-            unit_health = random.randrange(difficulty*3, difficulty*4)
+            #power is 2 - 3 times the difficulty
+            unit_health = random.randint(difficulty*4, difficulty*5)
             unit_mana = random.randrange(0, 1)
-            unit_power = random.randrange(difficulty*1, difficulty*2)
+            unit_power = random.randint(difficulty*2, difficulty*3)
+
+            #the name is randomly generated from a list
+            #given by the monster type specified
+            name = monster_names[random.randint(0, len(monster_names)-1)]
             
             self._monsters.append(Monster.generate(unit_health,
                                                    unit_mana,
                                                    unit_power,
-                                                   item_drop))
+                                                   item_drop,
+                                                   name))
 
     def __str__(self):
         """ String representation of a room instance, displaying
@@ -78,12 +90,13 @@ class Room(object):
         return "Room #" + str(self._room_id)
 
 class Dungeon(Graph):
-    def __init__(self, name):
+    def __init__(self, name, monster_type):
         """ Is a graph and takes a name argument. The dungeon
             connects room nodes and is a part of a larger graph """
 
         super(Dungeon, self).__init__()
         self._name = name
+        self._monster_type = monster_type
         self._start = None
 
     def set_start(self, room):
@@ -107,28 +120,26 @@ class Dungeon(Graph):
         for room in self.get_vertices():
             print str(room)
     
-    def generate_dungeon(self, num_to_generate, difficulty_min,
+    def generate_dungeon(self, num_rooms, difficulty_min,
                          difficulty_max=None, drop_rate=None, linearity=0):
         """ Generates a number of paths/rooms
             of varying ranges/difficulties (if defined) """
 
         drop_rate = drop_rate if drop_rate else 0
-        
-        if not difficulty_max:
-            difficulty_max = difficulty_min
-
+        difficulty_max = difficulty_max if difficulty_max else difficulty_min
         rooms = []
         
         #generates rooms and their monsters, and then links each room together
-        for i in range(num_to_generate):
+        for i in range(num_rooms):
 
-            room_difficulty = random.randrange(difficulty_min, difficulty_max)
+            room_difficulty = random.randint(difficulty_min, difficulty_max)
+            
             mob_count = random.randrange(1, 4)
 
-            if(i == num_to_generate-1):
-                room = Room(i, exitable=True)
+            if(i == num_rooms-1):
+                room = Room(i, self._monster_type, exitable=True)
             else:
-                room = Room(i)
+                room = Room(i, self._monster_type)
                 
             room.generate_monsters(mob_count, room_difficulty, drop_rate)
             self.add_vertex(room)
@@ -152,114 +163,3 @@ class Town():
 
     #TODO town properties
 
-
-class Unit(object):
-    def __init__(self, name=None, dct=None):
-        self._name = name
-        self._health = dct[conf.HEALTH_DATA] if dct else DEFAULT_HEALTH
-        self._max_health = dct[conf.MAX_HEALTH_DATA] if dct else DEFAULT_HEALTH
-        self._mana = dct[conf.MANA_DATA] if dct else DEFAULT_MANA
-        self._max_mana = dct[conf.MAX_MANA_DATA] if dct else DEFAULT_MANA
-        self._power = dct[conf.POWER_DATA] if dct else DEFAULT_POWER
-        
-    def get_health(self):
-        """ Returns the unit's current health """
-        return self._health
-
-    def set_health(self, health):
-        """ Sets the unit's health (no greater than its max) """
-        if(health > self._max_health):
-            self._health = self._max_health
-        else:
-            self._health = health
-
-    def get_max_health(self):
-        """ Returns the unit's health cap """
-        return self._max_health
-
-    def set_max_health(self, max_health):
-        """ Sets the unit's health cap """
-        self._max_health = max_health
-        
-    def get_mana(self):
-        """ Returns the unit's current mana """
-        return self._mana
-
-    def set_mana(self, mana):
-        """ Sets the unit's current mana (no greater than its max) """
-        if(mana > self._max_mana):
-            self._mana = self._max_mana
-        else:
-            self._mana = mana
-
-    def get_max_mana(self):
-        """ Returns the unit's mana cap """
-        return self._max_mana
-    
-    def set_max_mana(self, max_mana):
-        """ Sets the unit's mana cap """
-        self._max_mana = max_mana
-        
-    def get_power(self):
-        """ Returns the unit's power """
-        return self._power
-
-    def set_power(self, power):
-        """ Sets the unit's power """
-        self._power = power
-
-    def attack(self, unit):
-        """ Reduces another unit's health by this unit's power """
-        unit.set_health(unit.get_health() - self._power)
-
-    def encode(self):
-        """ Returns the unit's properties and type as a dictionary """
-        return {self.__class__.__name__: self.get_dict()}
-
-    def get_dict(self):
-        """ Returns the unit's properties as a dictionary """
-        return {conf.HEALTH_DATA: self._health,
-                conf.MAX_HEALTH_DATA: self._max_health,
-                conf.MANA_DATA: self._mana,
-                conf.MAX_MANA_DATA: self._max_mana,
-                conf.POWER_DATA: self._power}
-
-    @staticmethod
-    def from_dict(dct):
-        """ Accepts a dictionary of properties to
-            set the unit's health, mana, and power """
-
-        return Unit(dct=dct)
-
-    def get_name(self):
-        return self._name
-
-    def __str__(self):
-        return str(self._name) + ': ' + str(self.get_health()) + '/' + str(self.get_max_health())
-
-    @staticmethod
-    def generate_unit(health, mana, power, name=None):
-        return Unit(name,
-                    {conf.HEALTH_DATA: health,
-                     conf.MAX_HEALTH_DATA: health,
-                     conf.MANA_DATA: mana,
-                     conf.MAX_MANA_DATA: mana,
-                     conf.POWER_DATA: power})
-    
-class Monster(Unit):
-    def __init__(self, name=None, dct=None, loot=None):
-        super(Monster, self).__init__(name=name, dct=dct)
-        self._loot = loot if loot else None
-
-    def get_loot(self):
-        return self._loot
-
-    @staticmethod
-    def generate_unit(health, mana, power, loot, name=None):
-        return Monster(name,
-                       {conf.HEALTH_DATA: health,
-                        conf.MAX_HEALTH_DATA: health,
-                        conf.MANA_DATA: mana,
-                        conf.MAX_MANA_DATA: mana,
-                        conf.POWER_DATA: power},
-                       loot)

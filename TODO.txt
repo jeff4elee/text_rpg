@@ -1,2 +1,8 @@
 items - item table
 story prompts
+add equip to the jsonfile
+quit instead of quit()
+clean up text display
+add attack speed
+MAP
+fix linearity in rooms

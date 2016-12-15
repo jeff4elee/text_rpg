@@ -3,9 +3,23 @@ from item import *
 import sqlite3
 import simplejson as json
 
-pot = Potion("Basic Potion", 1, "Basic Bitches BRO [heals 10]", 10)
-wep = PrimaryWeapon("Sword", 1, "BASIC BITCH SWORD [+4 dmg]", 4)
+pot = Potion("Basic Potion", 1, "Basic Bitches BRO [heals 6]", 6)
+wep = PrimaryWeapon("Sword", 1, "BASIC BITCH SWORD [+4 dmg]", 1)
 
+def reset_item_table():
+
+    con = sqlite3.connect('data.db')
+    
+    cur = con.cursor()
+    
+    cur.execute('''DROP TABLE Items''')
+
+    cur.execute('''CREATE TABLE Items(Item_Id INTEGER PRIMARY KEY, '''
+                '''Item_Name TEXT UNIQUE, Rarity INTEGER, json_value TEXT)''')
+
+    con.commit()
+    con.close()
+    
 def add_item(item):
 
     con = sqlite3.connect('data.db')
