@@ -5,7 +5,10 @@ class Slot(Enum):
     Primary = 0x0001
     Secondary = 0x0002
     Two_Hand = 0x0003
-    
+    Body = 0x0004
+    Head = 0x0008
+
+        
 class Item(object):
 
     def __init__(self, item_name, rarity, description, consumable=None):
@@ -73,29 +76,27 @@ class Potion(Item):
 
 class Equippable(Item):
     
-    def __init__(self, item_name, rarity, description, slot_value, bonus):
+    def __init__(self, item_name, rarity, description, slot_value, bonuses):
         """ Abstract item class that includes abstract equip slot usage
             and stat bonuses """
         super(Equippable, self).__init__(item_name, rarity, description, False)
         self._slot_value = slot_value
-        self._bonus = bonus
+        self._bonuses = bonuses
 
     def get_slot(self):
         return self._slot_value
     
-    def get_bonus(self):
-        return self._bonus
-
-class PrimaryWeapon(Equippable):
-    
-    def __init__(self, item_name, rarity, description, power):
-        " Primary Weapon that with slot 0x0200 and a power bonus """
-        super(PrimaryWeapon, self).__init__(item_name, rarity, description,
-                                            Slot.Primary.value, power)
+    def get_bonuses(self):
+        return self._bonuses
 
     def get_dict(self):
-        data_dict = super(PrimaryWeapon, self).get_dict()
-        data_dict[conf.POWER_DATA] = self.get_bonus()
+        data_dict = super(Equippable, self).get_dict()
+        data_dict[conf.SLOT_VALUE] = self._slot_value
+        
+        for stat in conf.STATS:
+            if stat in self.get_bonuses():
+                data_dict[stat] = self.get_bonuses()[stat] 
+
         return data_dict
         
     def encode(self):
@@ -108,30 +109,36 @@ class PrimaryWeapon(Equippable):
         name = dct[conf.ITEM_NAME]
         rarity = dct[conf.ITEM_RARITY]
         descript = dct[conf.ITEM_DSCRPT]
-        atk = dct[conf.POWER_DATA]
-        return PrimaryWeapon(name, rarity, descript, atk)
-
-class SecondaryWeapon(Equippable):
-    
-    def __init__(self, item_name, rarity, description, power):
-        " Primary Weapon that with slot 0x0200 and a power bonus """
-        super(PrimaryWeapon, self).__init__(item_name, rarity, description,
-                                            Slot.Secondary.value, power)
-
-    def get_dict(self):
-        data_dict = super(PrimaryWeapon, self).get_dict()
-        data_dict[conf.POWER_DATA] = self.get_bonus()
-        return data_dict
+        slot = dct[conf.SLOT_VALUE]
         
+        weapon_stats = {}
+        for stat in conf.STATS:
+            if stat in dct.keys():
+                weapon_stats[stat] = dct[stat]
+        return Equippable(name, rarity, descript, slot, weapon_stats)
+
+class Coins(Item):
+    def __init__(self, amount=None):
+        super(Coins, self).__init__("Coins", 0, "A form of currency")
+        self._amount = amount if amount else 0
+
+    def use(self, amount):
+        if(amount <= self._amount):
+            self._amount -= amount
+            return
+        print "Insufficient funds!"
+
+    def add(self, amount):
+        self._amount += amount
+
+    def get_amount(self):
+        return self._amount
+    
     def encode(self):
-        """ Returns a dictionary filled with the weapon data """
-        data_dict = self.get_dict()
+        data_dict = {conf.COIN_AMOUNT: self._amount}
         return {self.__class__.__name__: data_dict}
 
     @staticmethod
     def from_dict(dct):
-        name = dct[conf.ITEM_NAME]
-        rarity = dct[conf.ITEM_RARITY]
-        descript = dct[conf.ITEM_DSCRPT]
-        atk = dct[conf.POWER_DATA]
-        return PrimaryWeapon(name, rarity, descript, atk)
+        amount = dct[conf.COIN_AMOUNT]
+        return Coins(amount)

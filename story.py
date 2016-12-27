@@ -21,7 +21,7 @@ def init_json_to_game(player, data_dict):
 
         #decodes each item in the inventory and equipped lists
         for index, item in enumerate(player_data[conf.INVENTORY_DATA]):
-
+            
             #queries the json_value of the item by its name
             cur.execute("""SELECT json_value FROM Items """ \
                         """WHERE Item_Name = ?""", (item,))
@@ -50,33 +50,59 @@ def init_json_to_game(player, data_dict):
 
 def enter_story():
     player = None
-    game.prompt_registration()
-    print ""
-    json_data = game.prompt_login()
-    player = init_json_to_game(player, json_data)
-    init_world(player)
 
-    print ""
-    story(player)
+    while(True):
+        
+        user_input = int(raw_input("1. Register 2. Login\n"))
+
+        if(user_input == 1):
+            game.prompt_registration()
+            print ""
+            
+        elif(user_input ==2):
+            try:
+                json_data = game.prompt_login()
+                player = init_json_to_game(player, json_data)
+                init_world(player)
+                story(player)
+            except:
+                continue
 
 def story(player):
 
-    def exchange_attacks(player, monster):
+    def exchange_attacks(unit_one, unit_two):
 
-        player.attack(monster)
+        #calculates which unit attacks faster
+        fastest_speed = min(unit_one.get_cspeed(), unit_two.get_cspeed())
 
-        print player.get_name() + " attacks " + str(monster.get_name()) + \
-              " for " + str(player.get_power()) + " damage\n"
+        #decreases the time each unit has to take to attack
+        unit_one.set_cspeed(unit_one.get_cspeed() - fastest_speed)
+        unit_two.set_cspeed(unit_two.get_cspeed() - fastest_speed)
+
+        #unit with 0 attack time will attack the other unit
+        #returns True if unit one attacks first, False if unit two
+        if(unit_one.get_cspeed() == 0):
+            
+            unit_one.attack(unit_two)
+
+            print unit_one.get_name() + " attacks " + str(unit_two.get_name()) + \
+                  " for " + str(unit_one.get_power()) + " damage\n"
+
+            time.sleep(2*conf.DEFAULT_PAUSE)
+
+            return True
         
-        time.sleep(2*conf.DEFAULT_PAUSE)
+        if(unit_two.get_health() > 0 and unit_two.get_cspeed() == 0):
+            
+            unit_two.attack(unit_one)
 
-        monster.attack(player)
-
-        print monster.get_name() + " attacks " + str(player.get_name()) + \
-              " for " + str(monster.get_power()) + " damage\n"
+            print unit_two.get_name() + " attacks " + str(unit_one.get_name()) + \
+                  " for " + str(unit_two.get_power()) + " damage\n"
         
-        time.sleep(2*conf.DEFAULT_PAUSE)
-       
+            time.sleep(2*conf.DEFAULT_PAUSE)
+
+            return False
+
     def item_menu_sequence(player):
 
         if not player.get_inventory():
@@ -108,7 +134,14 @@ def story(player):
             #or not it is consumable
             if(entered_option == str(ItemOptions.Use_Equip.value)):
 
+                if(isinstance(utilized_item, Coins)):
+                    print "Coins can't be used in this context"
+                    continue
+                
                 if(utilized_item.is_consumable()):
+
+                    print player.get_name() + " healed for " + \
+                          str(utilized_item.get_restore_value())
                     
                     player.set_health(player.get_health() +
                                       utilized_item.get_restore_value())
@@ -142,22 +175,30 @@ def story(player):
         #the sequence continues while both units are alive
         while(monster.get_health() > 0 and player.get_health() > 0):
             
-            FightOptions.display()
-            
+            FightOptions.display()            
             entered_option = str(raw_input())
 
             #option 1 is the standard attack
             if(entered_option == str(FightOptions.Attack.value)):
-                
-                exchange_attacks(player, monster)
-                
+
+                while(player.get_health()):
+                    if exchange_attacks(player, monster):
+                        break
                 display_unit_stats([player, monster])
-                
+                                
             #option 2 is item query
             elif(entered_option == str(FightOptions.Use_Item.value)):
 
                 item_menu_sequence(player)
-                display_unit_stats([monster])
+                print ""
+                display_unit_stats([player, monster])
+
+            elif(entered_option == str(FightOptions.Stats.value)):
+
+                player.display_stats()
+                print ""
+                player.display_equipped()
+                print ""
                 
         time.sleep(conf.DEFAULT_PAUSE)
         
@@ -166,13 +207,18 @@ def story(player):
             exit(0)
 
         else:
-            
             print "You have slain the monster\n"
+
+            player.set_cspeed(player.get_speed())
+            
             time.sleep(2*conf.DEFAULT_PAUSE)
 
-            item = monster.get_loot()
+            items = monster.get_loot()
 
-            if item:
+            while items:
+
+                item = decode(items.pop())
+
                 print str(item) + " has dropped"
 
                 pick_up_prompt = str(raw_input("Do you wish to pick it up? (Y/N)"))
@@ -204,13 +250,18 @@ def story(player):
                     
                     if(entered_option == str(TownOptions.Save.value)):
                         player.set_home_town(str(player.get_position()))
+                        player.set_health(player.get_max_health())
+                        player.set_mana(player.get_max_mana())
                         save(player)
 
-                    elif(entered_option == str(TownOptions.Display_Stats.value)):
+                    elif(entered_option == str(TownOptions.Stats.value)):
                         player.display_stats()
                         
-                    elif(entered_option == str(TownOptions.Display_Equipment.value)):
+                    elif(entered_option == str(TownOptions.Equipment.value)):
                         player.display_equipped()
+
+                    elif(entered_option == str(TownOptions.Use_Equip.value)):
+                        item_menu_sequence(player)
                         
                     elif(entered_option == str(TownOptions.Exit_Town.value)):
                         break
@@ -290,5 +341,3 @@ def save(player):
             
     data = player.encode()
     game.save("data.json", data)
-
-enter_story()

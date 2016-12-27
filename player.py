@@ -10,7 +10,9 @@ class Unit(object):
         self._mana = dct[conf.MANA_DATA] if dct else conf.DEFAULT_MANA
         self._max_mana = dct[conf.MAX_MANA_DATA] if dct else conf.DEFAULT_MANA
         self._power = dct[conf.POWER_DATA] if dct else conf.DEFAULT_POWER
-        
+        self._speed = dct[conf.SPEED_DATA] if dct else conf.DEFAULT_SPEED
+        self._cspeed = dct[conf.SPEED_DATA] if dct else conf.DEFAULT_SPEED
+            
     def get_health(self):
         """ Returns the unit's current health """
         return self._health
@@ -19,6 +21,8 @@ class Unit(object):
         """ Sets the unit's health (no greater than its max) """
         if(health > self._max_health):
             self._health = self._max_health
+        elif(health < 0):
+            self._health = 0
         else:
             self._health = health
 
@@ -57,9 +61,24 @@ class Unit(object):
         """ Sets the unit's power """
         self._power = power
 
+    def get_cspeed(self):
+        """ Returns the unit's speed """
+        return self._cspeed
+
+    def set_cspeed(self, cspeed):
+        self._cspeed = cspeed
+
+    def get_speed(self):
+        return self._speed
+    
+    def set_speed(self, speed):
+        """ Sets the unit's speed """
+        self._speed = speed
+        
     def attack(self, unit):
         """ Reduces another unit's health by this unit's power """
         unit.set_health(unit.get_health() - self._power)
+        self._cspeed = self._speed
 
     def encode(self):
         """ Returns the unit's properties and type as a dictionary """
@@ -71,13 +90,13 @@ class Unit(object):
                 conf.MAX_HEALTH_DATA: self._max_health,
                 conf.MANA_DATA: self._mana,
                 conf.MAX_MANA_DATA: self._max_mana,
-                conf.POWER_DATA: self._power}
+                conf.POWER_DATA: self._power,
+                conf.SPEED_DATA: self._speed}
 
     @staticmethod
     def from_dict(dct):
         """ Accepts a dictionary of properties to
             set the unit's health, mana, and power """
-
         return Unit(dct=dct)
 
     def get_name(self):
@@ -86,7 +105,9 @@ class Unit(object):
     def __str__(self):
         return str(self._name) + ':\n' + \
                "Health: " + str(self.get_health()) + \
-               '/' + str(self.get_max_health())
+               '/' + str(self.get_max_health()) + "\n" + \
+               "Attack Time: " + str(self.get_cspeed()) + '/' + \
+               str(self.get_speed())
 
     @staticmethod
     def generate(health, mana, power, name=None):
@@ -101,19 +122,20 @@ class Monster(Unit):
     
     def __init__(self, name=None, dct=None, loot=None):
         super(Monster, self).__init__(name=name, dct=dct)
-        self._loot = loot if loot else None
+        self._loot = loot if loot else []
 
     def get_loot(self):
         return self._loot
 
     @staticmethod
-    def generate(health, mana, power, loot, name=None):
+    def generate(health, mana, power, speed, loot, name=None):
         return Monster(name,
                        {conf.HEALTH_DATA: health,
                         conf.MAX_HEALTH_DATA: health,
                         conf.MANA_DATA: mana,
                         conf.MAX_MANA_DATA: mana,
-                        conf.POWER_DATA: power},
+                        conf.POWER_DATA: power,
+                        conf.SPEED_DATA: speed},
                        loot)
     
 class NodeTraverser(Unit):
@@ -184,14 +206,17 @@ class NodeTraverser(Unit):
              
 class Player(NodeTraverser):
 
-    def __init__(self, name, dct=None, inventory=None, equipped=None,
+    def __init__(self, name, dct=None, money=None,
+                 inventory=None, equipped=None,
                  graph=None, home_town=None):
         
         super(Player, self).__init__(name=name, dct=dct,
                                      graph=graph, home_town=home_town)
-        
-        self._inventory = inventory if inventory else []
 
+        self._money = money if money else Coins()
+        self._inventory = inventory if inventory else []
+        self._inventory_display = {}
+        
         #dict comprehension that uses str representation of bits as keys
         self._equipped = {str(slot.value): None for slot in \
                           Slot.__members__.values()}
@@ -212,13 +237,27 @@ class Player(NodeTraverser):
         
         print "Power: " + str(self.get_power())
 
+        print "Attack Speed: " + str(self.get_speed())
+        
         print "Inventory:",
 
         self.display_inventory()
-        
+
+    def get_money():
+        return self._money
+    
     def display_inventory(self):
         """ Neatly prints out the player's inventory """
-        print map(str, self._inventory)
+        for item in self._inventory:
+            if str(item) in self._inventory_display.keys():
+                self._inventory_display[str(item)] += 1
+            else:
+                self._inventory_display[str(item)] = 1
+
+        self._inventory_display[str(self._money)] = self._money.get_amount() 
+        print self._inventory_display
+
+        self._inventory_display.clear()
 
     def get_from_inventory(self, item_name):
         for item in self._inventory:
@@ -232,7 +271,10 @@ class Player(NodeTraverser):
 
     def add_to_inventory(self, item):
         """ Adds an item to the player's inventory """
-        self._inventory.append(item)
+        if(isinstance(item, Coins)):
+            self._money.add(item.get_amount())            
+        else:
+            self._inventory.append(item)
 
     def remove_from_inventory(self, item):
         """ Removes a specific item from the player's inventory """
@@ -259,19 +301,21 @@ class Player(NodeTraverser):
 
                 continue
             
-            item_data = item.get_dict()
+            item_data = item.get_bonuses()
             stats = ""
 
             #appends the stats string the bonuses the item provides
             if(conf.POWER_DATA in item_data.keys()):
                 stats += " Power: +" + str(item_data[conf.POWER_DATA])
-            if(conf.HEALTH_DATA in item_data.keys()):
-                stats += " Health: +" + str(item_data[conf.HEALTH_DATA])
-            if(conf.MANA_DATA in item_data.keys()):
-                stats += " Mana: +" + str(item_data[conf.MANA_DATA])
+            if(conf.MAX_HEALTH_DATA in item_data.keys()):
+                stats += " Health: +" + str(item_data[conf.MAX_HEALTH_DATA])
+            if(conf.MAX_MANA_DATA in item_data.keys()):
+                stats += " Mana: +" + str(item_data[conf.MAX_MANA_DATA])
+            if(conf.SPEED_DATA in item_data.keys()):
+                stats += " Speed: +" + str(item_data[conf.SPEED_DATA])
                 
             print Slot(int(slot)).name + ": " + str(item) + \
-                  "[" + stats + " ]"
+                  " [" + stats + " ]"
             
         
     def equip(self, item):
@@ -292,31 +336,46 @@ class Player(NodeTraverser):
 
             self._equipped[str(item.get_slot())] = item
 
-            item_data = item.get_dict()
+            item_data = item.get_bonuses()
 
             #applies any bonuses the item has
             if(conf.POWER_DATA in item_data.keys()):
                 self._power += item_data[conf.POWER_DATA]
-            if(conf.HEALTH_DATA in item_data.keys()):
-                self._health += item_data[conf.HEALTH_DATA]
-            if(conf.MANA_DATA in item_data.keys()):
-                self._mana += item_data[conf.MANA_DATA]
+            if(conf.MAX_HEALTH_DATA in item_data.keys()):
+                self._max_health += item_data[conf.MAX_HEALTH_DATA]
+                self._health += item_data[conf.MAX_HEALTH_DATA]
+            if(conf.MAX_MANA_DATA in item_data.keys()):
+                self._max_mana += item_data[conf.MAX_MANA_DATA]
+                self._mana += item_data[conf.MAX_MANA_DATA]
+            if(conf.SPEED_DATA in item_data.keys()):
+                self._speed -= item_data[conf.SPEED_DATA]
+                if(self._cspeed > self._speed):
+                    self._cspeed = self._speed
 
     def unequip(self, slot):
 
         if self._equipped[slot]:
 
             item = self._equipped[slot]
-            item_data = item.get_dict()
+            item_data = item.get_bonuses()
 
             #remove any bonuses the item has
             if(conf.POWER_DATA in item_data.keys()):
                 self._power -= item_data[conf.POWER_DATA]
-            if(conf.HEALTH_DATA in item_data.keys()):
-                self._health -= item_data[conf.HEALTH_DATA]
-            if(conf.MANA_DATA in item_data.keys()):
-                self._mana -= item_data[conf.MANA_DATA]
+            if(conf.MAX_HEALTH_DATA in item_data.keys()):
+                self._max_health -= item_data[conf.MAX_HEALTH_DATA]
+                self._health -= item_data[conf.MAX_HEALTH_DATA]
 
+                if(self._health <= 0):
+                    self._health = 1
+                    
+            if(conf.MAX_MANA_DATA in item_data.keys()):
+                self._max_mana -= item_data[conf.MAX_MANA_DATA]
+                self._mana -= item_data[conf.MAX_MANA_DATA]
+            if(conf.SPEED_DATA in item_data.keys()):
+                self._speed += item_data[conf.SPEED_DATA]
+                self._cspeed += item_data[conf.SPEED_DATA]
+                    
             self._equipped[slot] = None
             self.add_to_inventory(item)
 
@@ -334,6 +393,8 @@ class Player(NodeTraverser):
         
         data_dict[conf.INVENTORY_DATA] = [str(item) for item in self._inventory]
 
+        data_dict[conf.COIN_AMOUNT] = self._money.get_amount()
+        
         equipped = []
         
         #inserts a list of the player's equipped items into the dictionary
@@ -353,7 +414,7 @@ class Player(NodeTraverser):
         inventory = dct.pop(conf.INVENTORY_DATA)
         equipped = dct.pop(conf.EQUIP_DATA)
         home_town = dct.pop(conf.HOME_TOWN_DATA)
-        
+        money = dct.pop(conf.COIN_AMOUNT)
         return Player(name=dct['name'], dct=dct, inventory=inventory,
-                      equipped=equipped, home_town=home_town)
+                      money=Coins(money), equipped=equipped, home_town=home_town)
       

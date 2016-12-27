@@ -1,12 +1,15 @@
 from player import *
 from item import *
+from dungeon import *
 
 TYPES = { 'Unit' : Unit,
           'NodeTraverser': NodeTraverser,
           'Player': Player,
           'Item': Item,
           'Potion': Potion,
-          'PrimaryWeapon': PrimaryWeapon }
+          'Equippable': Equippable,
+          'Coins': Coins,
+          'Dungeon': Dungeon}
 
 def decode(dct):
     if len(dct) == 1:

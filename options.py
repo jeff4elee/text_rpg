@@ -3,8 +3,9 @@ from player import *
 
 class FightOptions(Enum):
     Attack = 1
-    Use_Item = 2 
-    Quit = 3
+    Use_Item = 2
+    Stats = 3
+    Quit = 4
 
     @classmethod    
     def display(self):
@@ -20,9 +21,10 @@ class FightOptions(Enum):
 class TownOptions(Enum):
 
     Save = 1
-    Display_Stats = 2
-    Display_Equipment = 3
-    Exit_Town = 4
+    Stats = 2
+    Equipment = 3
+    Use_Equip = 4
+    Exit_Town = 5
 
     @classmethod
     def display(self):
