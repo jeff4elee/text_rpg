@@ -1,3 +1,3 @@
 # Text_RPG
 
-Text-basd RPG with randomized dungeon generation
+Text-based RPG with randomized dungeon generation
